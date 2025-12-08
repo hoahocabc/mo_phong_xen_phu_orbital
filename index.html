@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>XEN PHỦ ORBITAL 3D với p5.js</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="sidebar">
+      <!-- Thêm thanh nắm để kéo thay đổi kích thước -->
+      <div id="resizer"></div>
+      
+      <h1>
+        XEN PHỦ ORBITAL 3D<br />
+        <span class="subtitle">HÓA HỌC ABC</span>
+      </h1>
+
+      <!-- Orbital X -->
+      <div class="control-group">
+        <h2>Orbital của X</h2>
+        <div class="button-row">
+          <button id="addOrbitalXs">s</button>
+          <button id="addOrbitalXp">p</button>
+        </div>
+        <div id="infoX" class="info-box"></div>
+      </div>
+
+      <!-- Orbital Y -->
+      <div class="control-group">
+        <h2>Orbital của Y</h2>
+        <div class="button-row">
+          <button id="addOrbitalYs">s</button>
+          <button id="addOrbitalYp">p</button>
+        </div>
+        <div id="infoY" class="info-box"></div>
+      </div>
+
+      <!-- Kiểu xen phủ -->
+      <div class="control-group">
+        <h2>Kiểu xen phủ</h2>
+        <div class="button-column">
+          <button id="sigmaBtn" class="toggle active">Xen phủ trục (σ)</button>
+          <button id="piBtn" class="toggle disabled">Xen phủ bên (π)</button>
+        </div>
+      </div>
+
+      <!-- Chế độ hiển thị orbital -->
+      <div class="control-group">
+        <h2>Chế độ hiển thị</h2>
+        <div class="button-row">
+          <button id="modePointsBtn" class="toggle active">Dạng điểm</button>
+          <button id="modeSurfaceBtn" class="toggle">Dạng lớp phủ</button>
+        </div>
+      </div>
+
+      <!-- Toggle nhãn trục -->
+      <div class="control-group">
+        <h2>Nhãn trục tọa độ</h2>
+        <div class="button-row">
+          <!-- Mặc định KHÔNG active (tắt nhãn) -->
+          <button id="axisToggleBtn" class="toggle">Bật/Tắt nhãn trục</button>
+        </div>
+      </div>
+
+      <!-- Thanh trượt khoảng cách tâm X-Y -->
+      <div class="control-group">
+        <h2>Điều chỉnh khoảng cách tâm</h2>
+        <div class="slider-row">
+          <input id="centerSlider" type="range" min="-10" max="10" step="1" value="0" />
+          <div class="slider-value"><span id="centerSliderValue">0</span> px</div>
+        </div>
+        <div class="note">Thanh trượt chỉ có tác dụng sau khi quá trình tiến lại gần nhau kết thúc.</div>
+      </div>
+
+      <!-- Điều khiển -->
+      <div class="control-group buttons">
+        <button id="playBtn" disabled>Play</button>
+        <button id="resetBtn" class="danger">Reset</button>
+      </div>
+    </div>
+
+    <div id="canvas-container">
+      <!-- p5.js sẽ gắn canvas ở đây -->
+    </div>
+  </div>
+
+  <script src="sketch.js"></script>
+</body>
+</html>
