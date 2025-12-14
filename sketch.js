@@ -17,9 +17,9 @@ let prevIsPlaying = false;
 const APPROACH_STEP = 1.5;
 const POINTS_APPROACH_MULTIPLIER = 1.8;
 
-// NOTE: Converted to let so UI can change them
-let POINTS_S = 200;
-let POINTS_P = 325;
+// NOTE: Cập nhật mật độ điểm mặc định để phân bố đều hơn
+let POINTS_S = 350; // Tăng từ 200 lên 350
+let POINTS_P = 500; // Tăng từ 325 lên 500
 
 let overlapType = "sigma";
 let renderMode = "points";
@@ -62,24 +62,40 @@ function safeCallMaterial(funcName, ...args) {
   }
 }
 
-// setPointMaterial: Đã cập nhật để vùng overlap có màu VÀNG SÁNG RỰC RỠ
+// setPointMaterial: Đã cập nhật để tạo cảm giác cầu 3D (Yêu cầu 1) và xử lý phát sáng (Yêu cầu 3)
 function setPointMaterial(r, g, b, opts = {}) {
-  // Nếu overlap, thay bằng màu VÀNG SÁNG RỰC RỠ cho hiệu ứng "Spark"
+  // Nếu overlap, thay bằng màu VÀNG SÁNG RỰC RỠ cho hiệu ứng "Spark" (YÊU CẦU 3: Phát sáng)
   if (opts.overlap) {
-    // Màu vàng sáng: (255, 255, 0) - Sử dụng Emissive Material để phát sáng
+    // TẮT vật liệu bóng/màu nền
+    safeCallMaterial('ambientMaterial', 0, 0, 0); 
+    safeCallMaterial('specularMaterial', 0, 0, 0); 
+    safeCallMaterial('shininess', 0);
+
+    // BẬT vật liệu phát sáng (Vàng sáng)
     if (safeCallMaterial('emissiveMaterial', 255, 255, 0)) return; 
     fill(255, 255, 0); // Màu dự phòng
     return;
   }
 
-  // Normal Electron: Use the passed color (matches surface)
+  // Normal Electron: (YÊU CẦU 2: Màu sắc chính xác & YÊU CẦU 1: Cảm giác cầu)
   const brightness = (typeof opts.brightness === 'number') ? opts.brightness : 1.0;
   const rr = Math.min(255, Math.round(r * brightness));
   const gg = Math.min(255, Math.round(g * brightness));
   const bb = Math.min(255, Math.round(b * brightness));
 
-  // Ambient material allows it to look solid but colored
-  if (safeCallMaterial('ambientMaterial', rr, gg, bb)) return;
+  // TẮT vật liệu phát sáng nếu có từ lần gọi trước
+  safeCallMaterial('emissiveMaterial', 0, 0, 0); 
+
+  // 1. Dùng Ambient/Diffuse Material để set màu nền chính xác
+  if (safeCallMaterial('ambientMaterial', rr, gg, bb)) {
+      // 2. Dùng Specular Material để set màu điểm sáng (trắng)
+      safeCallMaterial('specularMaterial', 255, 255, 255);
+      // 3. Tăng độ bóng (shininess) cho điểm sáng sắc nét (cảm giác cầu)
+      shininess(100); 
+      return;
+  }
+
+  // Fallback
   fill(rr, gg, bb);
 }
 
@@ -100,30 +116,43 @@ function setSurfaceMaterial(r,g,b) {
 }
 
 // Sampling helpers
+
+// Đã SỬA ĐỔI: Lấy mẫu đồng đều thể tích hình cầu
 function sampleSpherePoints(radius, count) {
   const pts = [];
   for (let i=0;i<count;i++){
-    const u=Math.random(), v=Math.random();
+    const u=Math.random(), v=Math.random(), w=Math.random(); // Lấy thêm w cho bán kính
     const theta = 2*Math.PI*u;
     const phi = Math.acos(2*v-1);
-    const x = radius * Math.sin(phi) * Math.cos(theta);
-    const y = radius * Math.sin(phi) * Math.sin(theta);
-    const z = radius * Math.cos(phi);
+    
+    // Áp dụng thuật toán lấy mẫu thể tích: r = R * (w^(1/3))
+    const r = radius * Math.cbrt(w); 
+    
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
     pts.push({x,y,z,_lobeSign:0});
   }
   return pts;
 }
+
+// Đã SỬA ĐỔI: Lấy mẫu đồng đều thể tích hình elip (lobe)
 function sampleEllipsoidLobes(long, short, offset, axisChar, count) {
   const pts=[];
   const half=Math.floor(count/2);
   for (let sign of [1,-1]) {
     for (let i=0;i<half;i++){
-      const u=Math.random(), v=Math.random();
+      const u=Math.random(), v=Math.random(), w=Math.random(); // Lấy thêm w cho tỷ lệ
       const theta = 2*Math.PI*u;
       const phi = Math.acos(2*v-1);
-      const X = long * Math.sin(phi) * Math.cos(theta);
-      const Y = short * Math.sin(phi) * Math.sin(theta);
-      const Z = short * Math.cos(phi);
+      
+      // Áp dụng thuật toán lấy mẫu thể tích hình elip: scale = (w^(1/3))
+      const r_scale = Math.cbrt(w); 
+      
+      const X = (long * Math.sin(phi) * Math.cos(theta)) * r_scale; 
+      const Y = (short * Math.sin(phi) * Math.sin(theta)) * r_scale; 
+      const Z = (short * Math.cos(phi)) * r_scale; 
+      
       let x=0,y=0,z=0;
       if (axisChar==="x") { x = X + sign*offset; y = Y; z = Z; }
       else if (axisChar==="y") { x = Y; y = X + sign*offset; z = Z; }
@@ -373,8 +402,9 @@ class Orbital {
     const [br,bg,bb] = myBase;
 
     const POINT_SPHERE_RADIUS = 1.4;
-    const SPHERE_DETAIL_X = 8;
-    const SPHERE_DETAIL_Y = 6;
+    // Tăng chi tiết để tạo hình cầu mặt trơn hơn
+    const SPHERE_DETAIL_X = 24; 
+    const SPHERE_DETAIL_Y = 16;
 
     let shrinkScale=1.0, isShrinkTarget=false;
     if (isMultiP && isP && idx===0 && partnerOrbital) {
@@ -412,10 +442,10 @@ class Orbital {
       noStroke();
 
       if (isOverlapHere) {
-        // --- OVERLAP: PURE BRIGHT YELLOW SPARK ---
-        setPointMaterial(255, 255, 255, { overlap: true }); // Dùng hàm đã sửa đổi
+        // --- OVERLAP: PURE BRIGHT YELLOW SPARK (Glow) ---
+        setPointMaterial(255, 255, 255, { overlap: true }); 
       } else {
-        // --- NORMAL: MATCHES SURFACE COLOR ---
+        // --- NORMAL: MATCHES SURFACE COLOR (Correct color + 3D look) ---
         setPointMaterial(br, bg, bb, { brightness: 1.0, overlap: false });
       }
       
@@ -573,36 +603,31 @@ function draw() {
     const baseColor = overlapType === "sigma" ? baseSigma : basePi;
     const glowColor = [255, 230, 140];
 
-    // --- CẬP NHẬT: HỆ THỐNG ÁNH SÁNG MỚI (Thêm đèn xoay) ---
+    // --- CẬP NHẬT: HỆ THỐNG ÁNH SÁNG MỚI ---
     if (renderMode === "surface") {
-      const [br,bg,bb]=baseColor;
-      
       // Giảm ánh sáng môi trường để tăng độ sâu của bóng tối
       ambientLight(60, 60, 60);
 
       // Đèn chính (Key Light) mạnh, màu trắng để tạo điểm phản chiếu (Highlight) rõ ràng
       directionalLight(255, 255, 255, 0.5, 0.5, -1);
 
-      // Đèn phụ (Fill Light) để đánh khối nhẹ phần bóng đổ
-      pointLight(Math.round(br*0.5), Math.round(bg*0.5), Math.round(bb*0.5), -200, 200, 300);
-      
-      // Đèn viền (Rim Light) phía sau để tách vật thể khỏi nền
-      pointLight(50, 50, 100, 0, -300, -200);
+      // Đã loại bỏ: pointLight(Math.round(br*0.5), Math.round(bg*0.5), Math.round(bb*0.5), -200, 200, 300);
+      // Đã loại bỏ: pointLight(50, 50, 100, 0, -300, -200);
 
       // --- NGUỒN SÁNG ĐIỂM XOAY (Dynamic Point Light) ---
       const lightRadius = 350; // Bán kính quỹ đạo
-      const lightSpeed = 0.02; // Tốc độ xoay (Đã tăng từ 0.008 lên 0.015)
+      const lightSpeed = 0.02; // Tốc độ xoay
       // Tính toán vị trí X và Z dựa trên góc xoay
       const lightX = lightRadius * cos(frameCount * lightSpeed);
       const lightZ = lightRadius * sin(frameCount * lightSpeed); 
       
-      // Ánh sáng điểm màu trắng sáng, quét ngang qua các orbital (Độ sáng đã giảm từ 255 xuống 180)
+      // Ánh sáng điểm màu trắng sáng, quét ngang qua các orbital
       pointLight(180, 180, 180, lightX, 0, lightZ);
 
     } else {
-      // Chế độ Points: Giữ nguyên
-      ambientLight(190, 190, 190); 
-      directionalLight(60,60,60, 0.5, -0.5, -1);
+      // Chế độ Points: Ánh sáng mạnh hơn để tạo highlight/shadow rõ rệt (Hỗ trợ cảm giác cầu 3D)
+      ambientLight(100, 100, 100); 
+      directionalLight(150, 150, 150, 0.5, -0.5, -1);
     }
 
     const piMode = (overlapType === "pi" && hasAnyPOrbitalsBothSides());
