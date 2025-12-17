@@ -1,7 +1,9 @@
+/* Updated to load Arial.ttf as default font and avoid WEBGL text calls before font ready */
 const FIT_BOOST = 1.35;
 
 let canvasParent;
 let arialFont = null;
+let fontLoadFailed = false;
 
 let angleY = 0, angleX = 0;
 let isDragging = false, lastMouseX = 0, lastMouseY = 0;
@@ -49,6 +51,22 @@ let showAxisLabels = false;
 let centerSliderValue = 0;
 
 const ui = {};
+
+// preload: load Arial.ttf so WEBGL text works without throwing
+function preload() {
+  // Try to load Arial.ttf from the same directory as index.html/sketch.js
+  // If the font file is present and served, this will block until loaded.
+  try {
+    arialFont = loadFont('Arial.ttf', 
+      () => { console.log('Arial.ttf loaded'); },
+      (err) => { console.warn('Failed to load Arial.ttf (error callback):', err); arialFont = null; fontLoadFailed = true; }
+    );
+  } catch (e) {
+    console.warn('Failed to call loadFont for Arial.ttf:', e);
+    arialFont = null;
+    fontLoadFailed = true;
+  }
+}
 
 // Safe material call
 function safeCallMaterial(funcName, ...args) {
@@ -277,7 +295,13 @@ function addAxisLabelsForCenterToOverlay(centerX, length=80, partnerX=null) {
   overlayLabels.push({ pos:{x: centerX, y:0, z: length + cushion}, text:'Z', color: COLOR_Z_BASE });
 }
 function drawOverlayLabels() {
+  // Avoid drawing p5 WEBGL text unless font has been successfully loaded.
   if (!showAxisLabels) { overlayLabels=[]; return; }
+  if (!arialFont) { 
+    // Font not loaded — skip overlay labels to avoid WEBGL text error.
+    overlayLabels=[]; 
+    return; 
+  }
   if (typeof text !== 'function') { overlayLabels=[]; return; }
   if (arialFont) textFont(arialFont);
   textSize(16); textAlign(CENTER, CENTER);
@@ -582,6 +606,19 @@ function setup() {
   const sz = getCanvasSize(); const w=sz.w, h=sz.h;
   const c = createCanvas(w,h, WEBGL); if (c && canvasParent && c.parent) c.parent(canvasParent);
   perspective(PI/3.2, w/h, 0.1, 20000);
+
+  // Ensure we set the p5 font if it was loaded in preload
+  if (arialFont) {
+    try { textFont(arialFont); } catch (e) { console.warn('Failed to set loaded font via textFont:', e); }
+  } else {
+    if (fontLoadFailed) {
+      console.warn('Arial.ttf failed to load in preload. WEBGL text drawing will be disabled.');
+    } else {
+      // In typical usage preload will have loaded the font. If not yet available, we skip setting font here.
+      console.log('Arial.ttf not available at setup time; labels will be skipped until font is loaded.');
+    }
+  }
+
   p5Ready = true;
   if (arialFont) textFont(arialFont);
   initUI();
@@ -610,9 +647,6 @@ function draw() {
 
       // Đèn chính (Key Light) mạnh, màu trắng để tạo điểm phản chiếu (Highlight) rõ ràng
       directionalLight(255, 255, 255, 0.5, 0.5, -1);
-
-      // Đã loại bỏ: pointLight(Math.round(br*0.5), Math.round(bg*0.5), Math.round(bb*0.5), -200, 200, 300);
-      // Đã loại bỏ: pointLight(50, 50, 100, 0, -300, -200);
 
       // --- NGUỒN SÁNG ĐIỂM XOAY (Dynamic Point Light) ---
       const lightRadius = 350; // Bán kính quỹ đạo
@@ -686,7 +720,14 @@ function draw() {
     let msg;
     try { msg = (err && err.stack) ? err.stack : JSON.stringify(err); } catch (e) { msg = String(err); }
     console.error('rendering error:', err, '\n', msg);
-    try { push(); resetMatrix(); translate(-width/2, -height/2); noLights(); fill(220,80,80); noStroke(); textSize(13); textAlign(LEFT, TOP); if (arialFont) textFont(arialFont); const shortMsg = (typeof msg==='string' && msg.length>400) ? msg.slice(0,400)+'…' : msg; text('Rendering error (see console):\n' + shortMsg, 8,8); pop(); } catch(e2){ console.error('overlay failed', e2); }
+    // Only draw overlay text if we have a loaded font (WEBGL requirement)
+    try { 
+      if (arialFont) {
+        push(); resetMatrix(); translate(-width/2, -height/2); noLights(); fill(220,80,80); noStroke(); textSize(13); textAlign(LEFT, TOP); if (arialFont) textFont(arialFont); const shortMsg = (typeof msg==='string' && msg.length>400) ? msg.slice(0,400)+'…' : msg; text('Rendering error (see console):\n' + shortMsg, 8,8); pop();
+      } else {
+        // Can't draw text in WEBGL without a loaded p5.Font; skip overlay text.
+      }
+    } catch(e2){ console.error('overlay failed', e2); }
   }
 }
 
